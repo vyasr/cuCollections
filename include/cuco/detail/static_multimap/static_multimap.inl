@@ -692,7 +692,7 @@ template <typename Key,
           typename Allocator,
           class ProbeSequence>
 template <typename OutputIt1, typename OutputIt2, typename PairEqual>
-__device__ __forceinline__ void
+__device__ __forceinline__ unsigned int
 static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view::pair_retrieve(
   cooperative_groups::thread_block_tile<ProbeSequence::cg_size> const& probing_cg,
   value_type const& pair,
@@ -701,7 +701,7 @@ static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view::pair_
   PairEqual pair_equal) noexcept
 {
   constexpr bool is_outer = false;
-  impl_.pair_retrieve<is_outer, uses_vector_load()>(
+  return impl_.pair_retrieve<is_outer, uses_vector_load()>(
     probing_cg, pair, probe_output_begin, contained_output_begin, pair_equal);
 }
 

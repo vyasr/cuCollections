@@ -982,7 +982,7 @@ class static_multimap {
      * @param pair_equal The binary callable used to compare two pairs for equality
      */
     template <typename OutputIt1, typename OutputIt2, typename PairEqual>
-    __device__ __forceinline__ void pair_retrieve(
+    __device__ __forceinline__ unsigned int pair_retrieve(
       cooperative_groups::thread_block_tile<ProbeSequence::cg_size> const& probing_cg,
       value_type const& pair,
       OutputIt1 probe_output_begin,

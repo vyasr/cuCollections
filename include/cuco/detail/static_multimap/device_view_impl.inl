@@ -16,6 +16,7 @@
 
 #include <cuco/detail/bitwise_compare.cuh>
 #include <cuco/detail/utils.cuh>
+#include <thrust/tuple.h>
 
 namespace cuco {
 
@@ -25,6 +26,27 @@ template <typename Key,
           typename Allocator,
           class ProbeSequence>
 class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_impl_base {
+ public:
+  /**
+   * @brief Gets the sentinel value used to represent an empty key slot.
+   *
+   * @return The sentinel value used to represent an empty key slot
+   */
+  __host__ __device__ __forceinline__ Key get_empty_key_sentinel() const noexcept
+  {
+    return empty_key_sentinel_;
+  }
+
+  /**
+   * @brief Gets the sentinel value used to represent an empty value slot.
+   *
+   * @return The sentinel value used to represent an empty value slot
+   */
+  __host__ __device__ __forceinline__ Value get_empty_value_sentinel() const noexcept
+  {
+    return empty_value_sentinel_;
+  }
+
  protected:
   // Import member type definitions from `static_multimap`
   using value_type          = value_type;
@@ -149,26 +171,6 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
   __host__ __device__ __forceinline__ std::size_t get_capacity() const noexcept
   {
     return probe_sequence_.get_capacity();
-  }
-
-  /**
-   * @brief Gets the sentinel value used to represent an empty key slot.
-   *
-   * @return The sentinel value used to represent an empty key slot
-   */
-  __host__ __device__ __forceinline__ Key get_empty_key_sentinel() const noexcept
-  {
-    return empty_key_sentinel_;
-  }
-
-  /**
-   * @brief Gets the sentinel value used to represent an empty value slot.
-   *
-   * @return The sentinel value used to represent an empty value slot
-   */
-  __host__ __device__ __forceinline__ Value get_empty_value_sentinel() const noexcept
-  {
-    return empty_value_sentinel_;
   }
 
   /**
@@ -1088,7 +1090,7 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
             typename OutputIt1,
             typename OutputIt2,
             typename PairEqual>
-  __device__ __forceinline__ std::enable_if_t<uses_vector_load, void> pair_retrieve(
+  __device__ __forceinline__ std::enable_if_t<uses_vector_load, unsigned int> pair_retrieve(
     ProbingCG const& probing_cg,
     value_type const& pair,
     OutputIt1 probe_output_begin,
@@ -1123,9 +1125,17 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
         auto const num_first_matches = __popc(first_exists);
 
         if (first_equals) {
+          printf("Found first pair equal with values (%d, %d).\n", pair.second, arr[0].second);
+          auto casted_pair = ProbePairType{pair};
+          auto casted_arr = ContainedPairType{arr[0]};
+          printf("is_convertible: %d.\n", std::is_convertible_v<ProbePairType, value_type>);
+          printf("After cast, the values are (%d, %d).\n", thrust::get<1>(casted_pair), thrust::get<1>(casted_arr));
           auto lane_offset = detail::count_least_significant_bits(first_exists, lane_id);
-          *(probe_output_begin + num_matches + lane_offset)     = ProbePairType{pair};
-          *(contained_output_begin + num_matches + lane_offset) = ContainedPairType{arr[0]};
+          printf("The values before write are: %d, %d.\n", thrust::get<1>(*(probe_output_begin + num_matches + lane_offset)), thrust::get<1>(*(contained_output_begin + num_matches + lane_offset)));
+          printf("Writing into offset %d.\n", num_matches + lane_offset);
+          *(probe_output_begin + num_matches + lane_offset)     = casted_pair;
+          *(contained_output_begin + num_matches + lane_offset) = casted_arr;
+          printf("The written value: %d, %d.\n", thrust::get<1>(*(probe_output_begin + num_matches + lane_offset)), thrust::get<1>(*(contained_output_begin + num_matches + lane_offset)));
         }
         if (second_equals) {
           auto lane_offset = detail::count_least_significant_bits(second_exists, lane_id);
@@ -1144,7 +1154,7 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
               this->get_empty_key_sentinel(), this->get_empty_value_sentinel())};
           }
         }
-        return;  // exit if any slot in the current window is empty
+        return num_matches;  // exit if any slot in the current window is empty
       }
 
       current_slot = next_slot(current_slot);
